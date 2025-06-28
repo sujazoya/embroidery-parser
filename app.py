@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pyembroidery import read
-import io
+import os
+import tempfile
 
 app = Flask(__name__)
 CORS(app)
@@ -27,12 +28,18 @@ def parse_embroidery():
         return jsonify({"success": False, "error": "No file uploaded"}), 400
 
     uploaded_file = request.files['file']
-    try:
-        # Convert to BytesIO
-        file_bytes = uploaded_file.read()
-        stream = io.BytesIO(file_bytes)
 
-        pattern = read(stream)
+    try:
+        # Save uploaded file to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as temp:
+            uploaded_file.save(temp.name)
+            temp_path = temp.name
+
+        # Parse the file
+        pattern = read(temp_path)
+
+        # Clean up temporary file
+        os.unlink(temp_path)
 
         width = round(pattern.get_width(), 2)
         height = round(pattern.get_height(), 2)
