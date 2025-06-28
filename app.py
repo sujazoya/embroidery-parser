@@ -26,10 +26,20 @@ def parse_embroidery():
         pattern = read_dst(file_path)
         stitches = len(pattern.stitches)
         colors = len(pattern.threadlist)
-        bounds = pattern.bounding_box()  # This replaces `.width` and `.height`
 
-        width = round(bounds[2] - bounds[0], 2)  # max_x - min_x
-        height = round(bounds[3] - bounds[1], 2)  # max_y - min_y
+        # Manual bounding box calculation
+        min_x = min_y = float('inf')
+        max_x = max_y = float('-inf')
+
+        for stitch in pattern.stitches:
+            x, y = stitch[0], stitch[1]
+            min_x = min(min_x, x)
+            max_x = max(max_x, x)
+            min_y = min(min_y, y)
+            max_y = max(max_y, y)
+
+        width = round(max_x - min_x, 2)
+        height = round(max_y - min_y, 2)
 
         # Machine Area logic
         if width >= 400:
