@@ -30,22 +30,28 @@ def parse_embroidery():
     uploaded_file = request.files['file']
 
     try:
-        # Save uploaded file to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as temp:
-            uploaded_file.save(temp.name)
-            temp_path = temp.name
+        # Save uploaded file to temp path
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as temp_file:
+            uploaded_file.save(temp_file.name)
+            temp_path = temp_file.name
 
-        # Parse the file
         pattern = read(temp_path)
 
-        # Clean up temporary file
-        os.unlink(temp_path)
+        # Get bounding box safely
+        if not hasattr(pattern, "bounding_box") or pattern.bounding_box is None:
+            os.unlink(temp_path)
+            return jsonify({"success": False, "error": "Invalid embroidery file: bounding box missing"}), 500
 
-        width = round(pattern.get_width(), 2)
-        height = round(pattern.get_height(), 2)
+        left, top, right, bottom = pattern.bounding_box
+
+        width = round(abs(right - left), 2)
+        height = round(abs(bottom - top), 2)
         stitches = len(pattern.stitches)
-        thread_count = len(pattern.threadlist)
+        threads = len(pattern.threadlist)
         area = classify_machine_area(width, height)
+
+        # Clean up temp file
+        os.unlink(temp_path)
 
         return jsonify({
             "success": True,
@@ -53,7 +59,7 @@ def parse_embroidery():
             "width": f"{width:.2f}",
             "height": f"{height:.2f}",
             "stitches": f"{stitches:,}",
-            "needle": str(thread_count),
+            "needle": str(threads),
             "formats": "dst",
             "area": area
         })
