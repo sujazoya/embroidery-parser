@@ -1,67 +1,57 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pyembroidery import read_dst
-import os
+from pyembroidery import read, EmbPattern
 
 app = Flask(__name__)
 CORS(app)
 
-def format_number(value, decimal_places=2, comma=True):
-    try:
-        if decimal_places == 0:
-            value = int(round(float(value)))
-            return f"{value:,}" if comma else str(value)
-        else:
-            formatted = f"{float(value):,.{decimal_places}f}" if comma else f"{float(value):.{decimal_places}f}"
-            return formatted
-    except Exception:
-        return str(value)
+def classify_machine_area(width, height):
+    # Custom logic for common machine areas
+    w, h = width, height
+    if w <= 100 and h <= 100:
+        return "4x4"
+    elif w <= 130 and h <= 180:
+        return "5x7"
+    elif w <= 160 and h <= 260:
+        return "6x10"
+    elif w <= 200 and h <= 300:
+        return "8x12"
+    elif w <= 260 and h <= 400:
+        return "10x16"
+    elif w <= 300 and h <= 500:
+        return "12x20"
+    return "Custom"
 
 @app.route('/parse_embroidery', methods=['POST'])
-def parse_dst():
+def parse_embroidery():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded', 'success': False}), 400
+        return jsonify({"success": False, "error": "No file uploaded"}), 400
 
-    file = request.files['file']
-    filename = file.filename
-
-    if not filename.lower().endswith('.dst'):
-        return jsonify({'error': 'Only .dst files are supported', 'success': False}), 400
-
+    f = request.files['file']
     try:
-        pattern = read_dst(file)
+        pattern = read(f)
 
-        # Get bounding box or fallbacks
-        try:
-            bbox = pattern.bounding_box()
-            width_mm = (bbox[2] - bbox[0]) / 10.0
-            height_mm = (bbox[3] - bbox[1]) / 10.0
-        except Exception:
-            width_mm = height_mm = 0
-
-        # Get design data
-        design_name = filename.rsplit('.', 1)[0]
+        # Get basic values
+        width = round(pattern.get_width(), 2)
+        height = round(pattern.get_height(), 2)
         stitches = len(pattern.stitches)
-        colors = len(pattern.threadlist)
-        machine_area = "Large" if width_mm > 250 or height_mm > 250 else "Standard"
-        formats = "dst"
-        needles = colors
+        thread_count = len(pattern.threadlist)
+
+        area = classify_machine_area(width, height)
 
         return jsonify({
-            'success': True,
-            'design_name': design_name,
-            'width': format_number(width_mm),
-            'height': format_number(height_mm),
-            'stitches': format_number(stitches, 0),
-            'needle': format_number(needles, 0),
-            'formats': formats,
-            'area': machine_area
+            "success": True,
+            "design_name": f.filename.split('.')[0],
+            "width": f"{width:.2f}",
+            "height": f"{height:.2f}",
+            "stitches": f"{stitches:,}",
+            "needle": str(thread_count),
+            "formats": "dst",
+            "area": area
         })
 
     except Exception as e:
-        return jsonify({'error': str(e), 'success': False}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
-# ✅ Render-compatible host and port
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=10000)
