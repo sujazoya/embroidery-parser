@@ -22,6 +22,13 @@ def classify_machine_area(width, height):
         return "12x20"
     return "Custom"
 
+def get_bounding_box_fallback(stitches):
+    xs = [s[0] for s in stitches]
+    ys = [s[1] for s in stitches]
+    if not xs or not ys:
+        return None
+    return min(xs), min(ys), max(xs), max(ys)
+
 @app.route('/parse_embroidery', methods=['POST'])
 def parse_embroidery():
     if 'file' not in request.files:
@@ -30,27 +37,27 @@ def parse_embroidery():
     uploaded_file = request.files['file']
 
     try:
-        # Save uploaded file to temp path
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as temp_file:
             uploaded_file.save(temp_file.name)
             temp_path = temp_file.name
 
         pattern = read(temp_path)
 
-        # Get bounding box safely
-        if not hasattr(pattern, "bounding_box") or pattern.bounding_box is None:
-            os.unlink(temp_path)
-            return jsonify({"success": False, "error": "Invalid embroidery file: bounding box missing"}), 500
+        # Use fallback if bounding_box is missing or None
+        bbox = pattern.bounding_box
+        if bbox is None:
+            bbox = get_bounding_box_fallback(pattern.stitches)
+            if bbox is None:
+                os.unlink(temp_path)
+                return jsonify({"success": False, "error": "Unable to determine design bounds"}), 500
 
-        left, top, right, bottom = pattern.bounding_box
-
+        left, top, right, bottom = bbox
         width = round(abs(right - left), 2)
         height = round(abs(bottom - top), 2)
         stitches = len(pattern.stitches)
         threads = len(pattern.threadlist)
         area = classify_machine_area(width, height)
 
-        # Clean up temp file
         os.unlink(temp_path)
 
         return jsonify({
