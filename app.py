@@ -1,43 +1,60 @@
 from flask import Flask, request, jsonify
-from pyembroidery import read_dst, read_emb
+from werkzeug.utils import secure_filename
+from pyembroidery import read_dst
 import os
 
 app = Flask(__name__)
+UPLOAD_FOLDER = 'uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/parse_embroidery', methods=['POST'])
 def parse_embroidery():
     if 'emb_file' not in request.files:
-        return jsonify(success=False, error="No file uploaded"), 400
+        return jsonify({'success': False, 'error': 'No file uploaded.'}), 400
 
     file = request.files['emb_file']
-    filename = file.filename.lower()
-    filepath = f"/tmp/{filename}"
-    file.save(filepath)
+    filename = secure_filename(file.filename)
+    file_ext = os.path.splitext(filename)[1].lower()
+
+    if file_ext != '.dst':
+        return jsonify({'success': False, 'error': 'Only .dst files are supported.'}), 400
+
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(file_path)
 
     try:
-        if filename.endswith('.dst'):
-            design = read_dst(filepath)
-        elif filename.endswith('.emb'):
-            design = read_emb(filepath)
+        pattern = read_dst(file_path)
+        stitches = len(pattern.stitches)
+        width = round(pattern.width, 2)
+        height = round(pattern.height, 2)
+        colors = len(pattern.threadlist)
+
+        # Machine Area logic (as per your rule)
+        if width >= 400:
+            machine_area = 400
+        elif width <= 300:
+            machine_area = 300
         else:
-            return jsonify(success=False, error="Unsupported file type"), 400
+            machine_area = width  # keep original between 300–400
 
-        stitches = design.count_stitches()
-        width = round(design.extents()[2] - design.extents()[0], 2)
-        height = round(design.extents()[3] - design.extents()[1], 2)
-        needles = len(design.get_threadlist())
-        formats = "DST, EMB"
-        machine_area = width if 300 < width < 400 else 300 if width <= 300 else 400
-
-        return jsonify(success=True, design_details={
-            "design_name": os.path.splitext(filename)[0],
-            "stitches": stitches,
-            "width": width,
-            "height": height,
-            "formats": formats,
-            "needles_from_colors": needles,
-            "machine_area": machine_area
-        })
-
+        response = {
+            'success': True,
+            'design_details': {
+                'width': width,
+                'height': height,
+                'stitches': stitches,
+                'needles_from_colors': colors,
+                'machine_area': machine_area,
+                'formats': 'DST',
+                'design_name': os.path.splitext(filename)[0]
+            }
+        }
     except Exception as e:
-        return jsonify(success=False, error=str(e)), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        os.remove(file_path)
+
+    return jsonify(response)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
