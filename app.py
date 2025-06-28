@@ -7,6 +7,7 @@ import tempfile
 app = Flask(__name__)
 CORS(app)
 
+# Classify hoop size
 def classify_machine_area(width, height):
     if width <= 100 and height <= 100:
         return "4x4"
@@ -22,11 +23,17 @@ def classify_machine_area(width, height):
         return "12x20"
     return "Custom"
 
-def get_bounding_box_fallback(stitches):
-    xs = [s[0] for s in stitches]
-    ys = [s[1] for s in stitches]
+# Calculate bounding box manually
+def calculate_bounding_box(pattern):
+    if not pattern.stitches or len(pattern.stitches) == 0:
+        return None
+
+    xs = [point[0] for point in pattern.stitches]
+    ys = [point[1] for point in pattern.stitches]
+
     if not xs or not ys:
         return None
+
     return min(xs), min(ys), max(xs), max(ys)
 
 @app.route('/parse_embroidery', methods=['POST'])
@@ -37,25 +44,25 @@ def parse_embroidery():
     uploaded_file = request.files['file']
 
     try:
+        # Save file to temp
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as temp_file:
             uploaded_file.save(temp_file.name)
             temp_path = temp_file.name
 
+        # Read pattern
         pattern = read(temp_path)
 
-        # Use fallback if bounding_box is missing or None
-        bbox = pattern.bounding_box
-        if bbox is None:
-            bbox = get_bounding_box_fallback(pattern.stitches)
-            if bbox is None:
-                os.unlink(temp_path)
-                return jsonify({"success": False, "error": "Unable to determine design bounds"}), 500
+        # Calculate bounding box
+        bbox = calculate_bounding_box(pattern)
+        if not bbox:
+            os.unlink(temp_path)
+            return jsonify({"success": False, "error": "Could not calculate bounding box"}), 500
 
         left, top, right, bottom = bbox
         width = round(abs(right - left), 2)
         height = round(abs(bottom - top), 2)
         stitches = len(pattern.stitches)
-        threads = len(pattern.threadlist)
+        needle = len(pattern.threadlist)
         area = classify_machine_area(width, height)
 
         os.unlink(temp_path)
@@ -66,7 +73,7 @@ def parse_embroidery():
             "width": f"{width:.2f}",
             "height": f"{height:.2f}",
             "stitches": f"{stitches:,}",
-            "needle": str(threads),
+            "needle": str(needle),
             "formats": "dst",
             "area": area
         })
