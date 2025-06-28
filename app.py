@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pyembroidery import read
+import io
 
 app = Flask(__name__)
 CORS(app)
@@ -27,8 +28,11 @@ def parse_embroidery():
 
     uploaded_file = request.files['file']
     try:
-        # Use the file stream to read the embroidery pattern
-        pattern = read(uploaded_file.stream)
+        # Convert to BytesIO
+        file_bytes = uploaded_file.read()
+        stream = io.BytesIO(file_bytes)
+
+        pattern = read(stream)
 
         width = round(pattern.get_width(), 2)
         height = round(pattern.get_height(), 2)
