@@ -7,6 +7,10 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+@app.route('/ping', methods=['GET', 'HEAD'])
+def ping():
+    return 'OK', 200
+
 @app.route('/parse_embroidery', methods=['POST'])
 def parse_embroidery():
     if 'emb_file' not in request.files:
