@@ -50,17 +50,18 @@ def parse_embroidery():
             machine_area = width  # between 300–400
 
         response = {
-            'success': True,
-            'design_details': {
-                'width': width,
-                'height': height,
-                'stitches': stitches,
-                'needles_from_colors': colors,
-                'machine_area': machine_area,
-                'formats': 'DST',
-                'design_name': os.path.splitext(filename)[0]
-            }
-        }
+    'success': True,
+    'design_details': {
+        'width': f"{round(width, 2):,.2f}",        # e.g. "390.00"
+        'height': f"{round(height, 2):,.2f}",
+        'stitches': f"{stitches:,}",               # e.g. "48,272"
+        'needles_from_colors': f"{colors}",        # Usually small int, no formatting
+        'machine_area': f"{machine_area:,.0f} mm", # e.g. "400 mm"
+        'formats': 'DST',
+        'design_name': os.path.splitext(filename)[0]
+    }
+}
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
