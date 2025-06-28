@@ -7,7 +7,6 @@ import tempfile
 app = Flask(__name__)
 CORS(app)
 
-# Classify hoop size
 def classify_machine_area(width, height):
     if width <= 100 and height <= 100:
         return "4x4"
@@ -21,20 +20,20 @@ def classify_machine_area(width, height):
         return "10x16"
     elif width <= 300 and height <= 500:
         return "12x20"
-    return "Custom"
+    return "Oversized"
 
-# Calculate bounding box manually
 def calculate_bounding_box(pattern):
-    if not pattern.stitches or len(pattern.stitches) == 0:
+    if not pattern.stitches:
         return None
-
     xs = [point[0] for point in pattern.stitches]
     ys = [point[1] for point in pattern.stitches]
-
     if not xs or not ys:
         return None
-
     return min(xs), min(ys), max(xs), max(ys)
+
+def count_color_changes(pattern):
+    # Color change command = 0x20 (decimal 32)
+    return sum(1 for command in pattern.stitches if command[2] == 32) + 1
 
 @app.route('/parse_embroidery', methods=['POST'])
 def parse_embroidery():
@@ -44,25 +43,26 @@ def parse_embroidery():
     uploaded_file = request.files['file']
 
     try:
-        # Save file to temp
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as temp_file:
             uploaded_file.save(temp_file.name)
             temp_path = temp_file.name
 
-        # Read pattern
         pattern = read(temp_path)
-
-        # Calculate bounding box
         bbox = calculate_bounding_box(pattern)
         if not bbox:
             os.unlink(temp_path)
             return jsonify({"success": False, "error": "Could not calculate bounding box"}), 500
 
         left, top, right, bottom = bbox
-        width = round(abs(right - left), 2)
-        height = round(abs(bottom - top), 2)
+
+        # Convert 1/10mm to mm
+        width = round(abs(right - left) / 10, 2)
+        height = round(abs(bottom - top) / 10, 2)
         stitches = len(pattern.stitches)
-        needle = len(pattern.threadlist)
+
+        # Thread count fix
+        needle = len(pattern.threadlist) if pattern.threadlist else count_color_changes(pattern)
+
         area = classify_machine_area(width, height)
 
         os.unlink(temp_path)
