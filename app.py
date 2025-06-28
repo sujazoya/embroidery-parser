@@ -7,10 +7,6 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-@app.route('/ping', methods=['GET', 'HEAD'])
-def ping():
-    return 'OK', 200
-
 @app.route('/parse_embroidery', methods=['POST'])
 def parse_embroidery():
     if 'emb_file' not in request.files:
@@ -29,17 +25,19 @@ def parse_embroidery():
     try:
         pattern = read_dst(file_path)
         stitches = len(pattern.stitches)
-        width = round(pattern.width, 2)
-        height = round(pattern.height, 2)
         colors = len(pattern.threadlist)
+        bounds = pattern.bounding_box()  # This replaces `.width` and `.height`
 
-        # Machine Area logic (as per your rule)
+        width = round(bounds[2] - bounds[0], 2)  # max_x - min_x
+        height = round(bounds[3] - bounds[1], 2)  # max_y - min_y
+
+        # Machine Area logic
         if width >= 400:
             machine_area = 400
         elif width <= 300:
             machine_area = 300
         else:
-            machine_area = width  # keep original between 300–400
+            machine_area = width  # between 300–400
 
         response = {
             'success': True,
