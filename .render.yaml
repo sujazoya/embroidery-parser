@@ -1,23 +1,28 @@
 services:
   - type: web
-    name: emb-parser
+    name: emb-parser-web
     env: python
+    region: frankfurt  # Choose closest to your users
     buildCommand: |
       pip install -r requirements.txt
       python prestart.py
     startCommand: gunicorn --worker-tmp-dir /dev/shm --workers 4 --threads 8 --worker-class gthread --timeout 0 app:app
-    plan: standard  # Better than free tier for stability
+    plan: standard
     envVars:
       - key: FLASK_ENV
         value: production
-      - key: MAX_CONTENT_LENGTH
-        value: "10485760"  # 10MB file size limit
       - key: JWT_SECRET_KEY
-        value: "your-ultra-secure-jwt-key-here"
-      - key: REDIS_URL
-        value: "redis://redis:6379/0"
-      - key: CELERY_BROKER_URL
-        value: "redis://redis:6379/0"
-      - key: MONITORING_ENABLED
-        value: "true"
-    healthCheckPath: /health
+        generateValue: true
+      - key: MAX_CONTENT_LENGTH
+        value: "10485760"
+      - key: RATE_LIMIT
+        value: "100 per minute"
+      - key: ADMIN_USERNAME
+        value: "admin"  # Change in production
+      - key: ADMIN_PASSWORD
+        generateValue: true
+
+  - type: redis
+    name: emb-parser-redis
+    plan: standard
+    region: frankfurt
