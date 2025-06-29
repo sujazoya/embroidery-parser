@@ -1,73 +1,67 @@
 #!/bin/bash
 set -eo pipefail
 
+# Initialize success flag (0 means success)
+SCRIPT_SUCCESS=0
+
 # Function to log messages with timestamp
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
-# Function to handle errors
-error_handler() {
-    local exit_code=$?
-    local line_number=$1
-    local command=$2
-    log "❌ Error occurred at line ${line_number}: command '${command}' exited with status ${exit_code}"
-    exit ${exit_code}
+# Function to handle non-critical errors
+soft_fail() {
+    local message=$1
+    log "⚠️ $message (continuing anyway)"
+    SCRIPT_SUCCESS=1  # Mark as soft failure
 }
 
-# Trap errors
-trap 'error_handler ${LINENO} "${BASH_COMMAND}"' ERR
+log "---- Starting Render Build Script ----"
 
 log "---- Installing Python Dependencies ----"
 if [ -f "requirements.txt" ]; then
-    pip install --no-cache-dir -r requirements.txt || {
-        log "⚠️ Failed to install some dependencies, but continuing..."
-    }
+    if pip install --no-cache-dir -r requirements.txt; then
+        log "✅ Dependencies installed successfully"
+    else
+        soft_fail "Failed to install some dependencies"
+    fi
 else
-    log "⚠️ requirements.txt not found, skipping Python dependencies installation"
+    soft_fail "requirements.txt not found"
 fi
 
 log "---- Skipping prestart.py (not needed) ----"
 
 log "---- (Optional) Checking Redis Connection ----"
-python3 <<'EOF'
-import os
-import sys
-import redis
+if ! python3 -c '
+import os, sys, redis
 from urllib.parse import urlparse
 
-def check_redis_connection():
-    url = os.getenv('REDIS_URL')
-    print(f'REDIS_URL: {url}')
-    
+def check_redis():
+    url = os.getenv("REDIS_URL")
     if not url:
-        print('⚠️ REDIS_URL is not set.')
-        return
-        
-    try:
-        # Validate URL format
-        parsed = urlparse(url)
-        if not all([parsed.scheme, parsed.netloc]):
-            raise ValueError(f"Invalid Redis URL format: {url}")
-            
-        # Attempt connection
-        r = redis.Redis.from_url(url, socket_timeout=5, socket_connect_timeout=5)
-        
-        # Test connection
-        if not r.ping():
-            raise ConnectionError("Redis ping failed")
-            
-        print('✅ Redis ping successful')
+        print("ℹ️ REDIS_URL not set - skipping Redis check")
         return True
-        
-    except redis.exceptions.RedisError as e:
-        print(f'⚠️ Redis connection failed (but continuing anyway): {str(e)}')
+    
+    try:
+        r = redis.Redis.from_url(
+            url,
+            socket_timeout=5,
+            socket_connect_timeout=5,
+            health_check_interval=30
+        )
+        if r.ping():
+            print("✅ Redis connection successful")
+            return True
+        print("⚠️ Redis ping failed")
         return False
     except Exception as e:
-        print(f'⚠️ Unexpected error checking Redis (but continuing anyway): {str(e)}')
+        print(f"⚠️ Redis connection check failed: {str(e)}")
         return False
 
-check_redis_connection()
-EOF
+sys.exit(0 if check_redis() else 1)
+'; then
+    soft_fail "Redis connection check failed"
+fi
 
-log "---- Setup Completed Successfully ----"
+log "---- Render Build Script Completed ----"
+exit $SCRIPT_SUCCESS
