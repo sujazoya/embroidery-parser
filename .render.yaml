@@ -2,6 +2,22 @@ services:
   - type: web
     name: emb-parser
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python app.py"
-    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      python prestart.py
+    startCommand: gunicorn --worker-tmp-dir /dev/shm --workers 4 --threads 8 --worker-class gthread --timeout 0 app:app
+    plan: standard  # Better than free tier for stability
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: MAX_CONTENT_LENGTH
+        value: "10485760"  # 10MB file size limit
+      - key: JWT_SECRET_KEY
+        value: "your-ultra-secure-jwt-key-here"
+      - key: REDIS_URL
+        value: "redis://redis:6379/0"
+      - key: CELERY_BROKER_URL
+        value: "redis://redis:6379/0"
+      - key: MONITORING_ENABLED
+        value: "true"
+    healthCheckPath: /health
