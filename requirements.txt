@@ -8,3 +8,6 @@ celery==5.3.6
 redis==5.0.1
 prometheus-flask-exporter==0.22.4
 python-dotenv==1.0.0
+# Add these additional dependencies
+render>=0.0.1
+redis>=4.5.5
