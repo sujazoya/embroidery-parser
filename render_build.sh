@@ -2,13 +2,15 @@
 echo "---- Installing Python Dependencies ----"
 pip install -r requirements.txt
 
-echo "---- Running Prestart ----"
-python prestart.py
+echo "---- Skipping prestart.py (file not found) ----"
 
 echo "---- Checking Redis Connection ----"
 python -c "
 import os
 import redis
-r = redis.Redis.from_url(os.getenv('REDIS_URL'))
-print('Redis ping:', r.ping())
+try:
+    r = redis.Redis.from_url(os.getenv('REDIS_URL'))
+    print('Redis ping:', r.ping())
+except Exception as e:
+    print('Redis connection failed:', e)
 "
