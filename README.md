@@ -1,42 +1,40 @@
-# Embroidery Parser API (EMB/DST Parser)
+# Advanced Embroidery Parser API
 
-This is a Flask-based microservice that parses `.emb` and `.dst` embroidery files and returns structured metadata such as:
+A high-performance microservice for parsing embroidery files (DST, EMB, PES, etc.) with enhanced features and security.
 
-- Width (mm)
-- Height (mm)
-- Stitches
-- Needles (colors)
-- Machine Area
-- Design Formats
-- Design Name
+## Features
 
-## 🧠 Tech Stack
+- Supports multiple file formats: DST, EMB, EXP, PES, VP3, XXX
+- Detailed metadata extraction
+- API key authentication
+- Rate limiting
+- Health monitoring
+- Async processing
+- Docker support
 
-- Python
-- Flask
-- [PyEmbroidery](https://github.com/EmbroidePy/pyembroidery)
-
-## 🚀 API Usage
+## API Endpoints
 
 ### `POST /parse_embroidery`
 
-Upload an embroidery file via form-data:
+**Headers:**
+- `X-API-KEY: your-api-key`
 
-**Form Key:** `emb_file`  
-**File Types Supported:** `.emb`, `.dst`
+**Form Data:**
+- `file`: Embroidery file to parse
 
-#### ✅ Example Response
-
+**Response:**
 ```json
 {
   "success": true,
+  "processing_time_seconds": 0.123,
   "design_details": {
-    "width": 95.2,
-    "height": 83.1,
-    "stitches": 5321,
-    "needles_from_colors": 4,
-    "machine_area": 300,
-    "formats": "EMB-W6, EMB-E4, DST",
-    "design_name": "flower_vintage"
+    "design_name": "sample",
+    "width": "95.20",
+    "height": "83.10",
+    "stitches": "5,321",
+    "needle": "4",
+    "formats": "dst,emb,exp,pes,vp3,xxx",
+    "area": "4x4",
+    "thread_colors": ["#FF0000", "#00FF00"]
   }
 }
