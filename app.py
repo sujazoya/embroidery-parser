@@ -24,8 +24,8 @@ jwt = JWTManager(app)
 # Security & Performance Settings
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB limit
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'fallback-secret-key')
-app.config['CELERY_BROKER_URL'] = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-app.config['REDIS_URL'] = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+app.config['REDIS_URL'] = os.getenv('REDIS_URL', 'redis://emb-parser-redis:6379/0')
+app.config['CELERY_BROKER_URL'] = os.getenv('REDIS_URL', 'redis://emb-parser-redis:6379/0')
 
 # Rate Limiting (Prevent Abuse)
 limiter = Limiter(
@@ -82,9 +82,23 @@ def count_color_changes(pattern):
     return sum(1 for point in pattern.stitches if len(point) > 2 and point[2] == 32) + 1
 
 # ===== API Endpoints =====
-@app.route('/health', methods=['GET'])
+@app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy", "version": "2.0.0"})
+    return jsonify({
+        "status": "healthy",
+        "services": {
+            "redis": "connected" if check_redis() else "disconnected",
+            "storage": "ok"
+        }
+    })
+
+def check_redis():
+    try:
+        import redis
+        r = redis.Redis.from_url(app.config['REDIS_URL'])
+        return r.ping()
+    except:
+        return False
 
 @app.route('/auth/token', methods=['POST'])
 def generate_token():
