@@ -96,5 +96,8 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Embroidery Parser API is running 🚀"
+    return {
+        "status": "running",
+        "message": "Embroidery Parser API is live 🚀"
+    }
 
