@@ -1,115 +1,78 @@
-import os
-import uuid
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from square.client import Client
-import pyembroidery
-
 app = Flask(__name__)
 CORS(app)
 
-# Square Setup
-SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
-client = Client(access_token=SQUARE_TOKEN, environment='production')
-
-@app.route('/')
+# Home route (IMPORTANT for Render)
+@app.route("/")
 def home():
-    return jsonify({"status": "EmbDesign Square API Live"}), 200
+    return {
+        "status": "running",
+        "message": "Embroidery Parser API is live 🚀"
+    }
 
-@app.route('/categories', methods=['GET'])
-def get_categories():
-    try:
-        result = client.catalog.list_catalog(types='CATEGORY')
-        if result.is_success():
-            objs = result.body.get('objects', [])
-            categories = [{"id": o['id'], "name": o['category_data']['name']} for o in objs]
-            return jsonify(categories)
-        return jsonify({"error": "Square API Error", "details": result.errors}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+# Define hoop size categories
+def classify_machine_area(width, height):
+    if width <= 100 and height <= 100:
+@@ -23,7 +31,6 @@ def classify_machine_area(width, height):
+        return "12x20"
+    return "Oversized"
 
-@app.route('/parse', methods=['POST'])
-def parse_embroidery():
-    if 'file' not in request.files:
-        return jsonify({"success": False, "error": "No file uploaded"}), 400
-    
-    file = request.files['file']
-    temp_path = os.path.join("/tmp", file.filename)
-    file.save(temp_path)
-    
-    try:
-        pattern = pyembroidery.read(temp_path)
-        
-        # Exact logic from your working parser
-        stitches = pattern.count_stitches()
-        bounds = pattern.bounds()  # [min_x, min_y, max_x, max_y]
-        width = round((bounds[2] - bounds[0]) / 10, 1)
-        height = round((bounds[3] - bounds[1]) / 10, 1)
-        needles = len(pattern.threadlist) if hasattr(pattern, 'threadlist') else 1
-        
-        design_name = file.filename.rsplit('.', 1)[0].replace('_', ' ').title()
+# Calculate bounding box from stitches
+def calculate_bounding_box(pattern):
+    if not pattern.stitches:
+        return None
+@@ -33,9 +40,7 @@ def calculate_bounding_box(pattern):
+        return None
+    return min(xs), min(ys), max(xs), max(ys)
 
-        # Structured description for Square
-        description = (
-            f"Embroidery Design Details:\n"
-            f"- Design Name: {design_name}\n"
-            f"- Stitches: {stitches}\n"
-            f"- Dimensions: {width}mm x {height}mm\n"
-            f"- Colors: {needles}\n"
-            f"- Formats: .DST, .EMB"
-        )
+# Fallback: count color changes manually
+def count_color_changes(pattern):
+    # Color change command = 0x20 (decimal 32)
+    return sum(1 for point in pattern.stitches if point[2] == 32) + 1
 
-        os.remove(temp_path)
+@app.route('/parse_embroidery', methods=['POST'])
+@@ -52,23 +57,19 @@ def parse_embroidery():
+
+        pattern = read(temp_path)
+
+        # Calculate bounding box and convert to mm
+        bbox = calculate_bounding_box(pattern)
+        if not bbox:
+            os.unlink(temp_path)
+            return jsonify({"success": False, "error": "Could not calculate bounding box"}), 500
+
+        left, top, right, bottom = bbox
+        width = round(abs(right - left) / 10, 2)  # Convert from 1/10 mm
+        width = round(abs(right - left) / 10, 2)
+        height = round(abs(bottom - top) / 10, 2)
+        stitches = len(pattern.stitches)
+
+        # Determine thread count (needle) safely
+        needle = len(pattern.threadlist) if pattern.threadlist else count_color_changes(pattern)
+
+        area = classify_machine_area(width, height)
+
+        # Clean up temp file
+        os.unlink(temp_path)
 
         return jsonify({
-            "success": True,
-            "design_details": {
-                "design_name": design_name,
-                "description": description,
-                "width": width,
-                "height": height,
-                "stitches": stitches,
-                "needles": needles,
-                "suggested_price": 10.00
-            }
-        })
+@@ -85,19 +86,7 @@ def parse_embroidery():
     except Exception as e:
-        if os.path.exists(temp_path): os.remove(temp_path)
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/upload-to-square', methods=['POST'])
-def upload():
-    data = request.json
-    try:
-        item_body = {
-            "idempotency_key": str(uuid.uuid4()),
-            "object": {
-                "type": "ITEM",
-                "id": "#new_design",
-                "item_data": {
-                    "name": data.get('name'),
-                    "description": data.get('description'),
-                    "category_id": data.get('category_id'),
-                    "variations": [{
-                        "type": "ITEM_VARIATION",
-                        "id": "#new_var",
-                        "item_variation_data": {
-                            "name": "Digital Download",
-                            "pricing_type": "FIXED_PRICING",
-                            "price_money": {"amount": int(float(data.get('price', 10)) * 100), "currency": "USD"}
-                        }
-                    }]
-                }
-            }
-        }
-        result = client.catalog.upsert_catalog_object(item_body)
-        if result.is_success():
-            return jsonify({"success": True, "item": result.body})
-        return jsonify({"success": False, "error": result.errors}), 400
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
-    # Your working repo uses the dynamic PORT env var
+    import os
+    port = int(os.environ.get("PORT", 5000))
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
+
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return {
+        "status": "running",
+        "message": "Embroidery Parser API is live 🚀"
+    }
